@@ -1,0 +1,16 @@
+# Place your Outfit font files here
+# Download from: https://fonts.google.com/specimen/Outfit
+# 
+# Required font files:
+# - Outfit-Thin.ttf
+# - Outfit-ExtraLight.ttf
+# - Outfit-Light.ttf
+# - Outfit-Regular.ttf
+# - Outfit-Medium.ttf
+# - Outfit-SemiBold.ttf
+# - Outfit-Bold.ttf
+# - Outfit-ExtraBold.ttf
+# - Outfit-Black.ttf
+#
+# After adding the font files, run: flutter pub get
+

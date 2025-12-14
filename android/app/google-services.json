@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "520680522712",
+    "project_id": "pustimo-dev",
+    "storage_bucket": "pustimo-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:520680522712:android:d0c34ecd65ce85bd6a68ad",
+        "android_client_info": {
+          "package_name": "com.example.pustimo_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCm8-6BGieWDE0jdTITB9uEAJ5yUqoMleU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
