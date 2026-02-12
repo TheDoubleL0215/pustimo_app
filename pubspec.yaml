@@ -18,6 +18,8 @@ dependencies:
   percent_indicator: ^4.2.5
   toastification: ^3.0.3
   fl_chart: ^0.69.0
+  flutter_blue_plus: ^2.1.0
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:

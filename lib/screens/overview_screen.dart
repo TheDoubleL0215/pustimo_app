@@ -5,6 +5,8 @@ import '/widgets/circular_progress_indicator.dart';
 import '/widgets/edit_goal_bottom_sheet.dart';
 import '/widgets/edit_intake_dialog.dart';
 import '/widgets/weekly_chart.dart';
+import '/services/bluetooth_service.dart';
+import 'package:pustimo_app/bluetooth/bluetooth_service.dart';
 
 String _getTodayDateString() {
   final now = DateTime.now();
@@ -42,6 +44,25 @@ class OverviewScreen extends StatefulWidget {
 }
 
 class _OverviewScreenState extends State<OverviewScreen> {
+  Future<void> _updateIntakeInFirestore(String userId, int intake) async {
+    try {
+      final todayDate = _getTodayDateString();
+      final dailyStatsRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('dailyStats')
+          .doc(todayDate);
+
+      await dailyStatsRef.set({
+        'date': todayDate,
+        'intake': intake,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error updating intake in Firestore: $e');
+    }
+  }
+
   void _showEditGoalBottomSheet(BuildContext context, int currentDailyTarget) {
     showModalBottomSheet(
       context: context,
@@ -119,8 +140,17 @@ class _OverviewScreenState extends State<OverviewScreen> {
                   // Ensure today's stats document exists
                   _ensureTodayStatsExists(user.uid);
 
-                  // Stream today's stats
+                  final bluetoothService = BluetoothService();
+                  final pustimoBt = PustimoBluetoothService.instance;
                   final todayDate = _getTodayDateString();
+
+                  // Prefer device connected via Device screen (PustimoBluetoothService), else old BluetoothService, else Firebase
+                  final usePustimoBt = pustimoBt.isConnected;
+                  final useLegacyBt =
+                      !usePustimoBt && bluetoothService.isConnected;
+                  final anyBtConnected = usePustimoBt || useLegacyBt;
+
+                  // Stream today's stats - kombináljuk a Bluetooth stream-et a Firebase-dal
                   return StreamBuilder<DocumentSnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('users')
@@ -136,38 +166,79 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
                       final statsData =
                           statsSnapshot.data?.data() as Map<String, dynamic>?;
-                      final currentIntake = statsData?['intake'] as int? ?? 0;
+                      final firebaseIntake = statsData?['intake'] as int? ?? 0;
 
-                      return Column(
-                        children: [
-                          CircularProgressIndicatorWidget(
-                            currentIntake: currentIntake,
-                            dailyTarget: dailyTarget,
-                            lineWidth: lineWidth,
-                            radius: radius,
-                            onIntakeTap: () => _showEditIntakeDialog(
-                              context,
-                              currentIntake,
-                              dailyTarget,
-                              user.uid,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton.icon(
-                            onPressed: () =>
-                                _showEditGoalBottomSheet(context, dailyTarget),
-                            icon: const Icon(Icons.edit),
-                            label: const Text('Cél szerkesztése'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
+                      // Live stream: Pustimo (COUNT:100) or legacy Bluetooth, else Firebase value
+                      Stream<int> intakeStream;
+                      int initialIntake;
+                      if (usePustimoBt) {
+                        intakeStream = pustimoBt.intakeStream.map((btValue) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _updateIntakeInFirestore(user.uid, btValue);
+                          });
+                          return btValue;
+                        });
+                        initialIntake = pustimoBt.currentIntake;
+                      } else if (useLegacyBt) {
+                        intakeStream = bluetoothService.intakeStream.map((
+                          btValue,
+                        ) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _updateIntakeInFirestore(user.uid, btValue);
+                          });
+                          return btValue;
+                        });
+                        initialIntake = bluetoothService.currentIntake;
+                      } else {
+                        intakeStream = Stream.value(firebaseIntake);
+                        initialIntake = firebaseIntake;
+                      }
+
+                      return StreamBuilder<int>(
+                        stream: intakeStream,
+                        initialData: initialIntake,
+                        builder: (context, btSnapshot) {
+                          final currentIntake = anyBtConnected
+                              ? (btSnapshot.data ?? initialIntake)
+                              : firebaseIntake;
+
+                          return Column(
+                            children: [
+                              // Bluetooth állapot jelző (ha kapcsolódva)
+                              CircularProgressIndicatorWidget(
+                                currentIntake: currentIntake,
+                                dailyTarget: dailyTarget,
+                                lineWidth: lineWidth,
+                                radius: radius,
+                                onIntakeTap: anyBtConnected
+                                    ? null // Ne engedélyezzük a manuális szerkesztést Bluetooth módban
+                                    : () => _showEditIntakeDialog(
+                                        context,
+                                        currentIntake,
+                                        dailyTarget,
+                                        user.uid,
+                                      ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          WeeklyChart(userId: user.uid),
-                        ],
+                              const SizedBox(height: 24),
+                              ElevatedButton.icon(
+                                onPressed: () => _showEditGoalBottomSheet(
+                                  context,
+                                  dailyTarget,
+                                ),
+                                icon: const Icon(Icons.edit),
+                                label: const Text('Cél szerkesztése'),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                              WeeklyChart(userId: user.uid),
+                            ],
+                          );
+                        },
                       );
                     },
                   );
